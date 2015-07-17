@@ -1192,7 +1192,7 @@ static void MixpanelReachabilityCallback(SCNetworkReachabilityRef target, SCNetw
     [self checkForDecideResponseWithCompletion:completion useCache:YES];
 }
 
-- (void)checkForDecideResponseWithCompletion:(void (^)(NSArray *surveys, NSArray *notifications, NSSet *variants, NSSet *eventBindings))completion useCache:(BOOL)useCache
+- (void)checkForDecideResponseWithCompletion:(void (^)(NSArray *surveys, NSArray *notifications, NSSet *variants, NSSet *eventBindings))completion useCache:(BOOL)useCache errorCallback:(void(^)(NSError *error))errorCallback
 {
     dispatch_async(self.serialQueue, ^{
         MixpanelDebug(@"%@ decide check started", self);
@@ -1217,15 +1217,24 @@ static void MixpanelReachabilityCallback(SCNetworkReachabilityRef target, SCNetw
             NSData *data = [NSURLConnection sendSynchronousRequest:request returningResponse:&urlResponse error:&error];
             if (error) {
                 MixpanelError(@"%@ decide check http error: %@", self, error);
+                if(errorCallback){
+                    errorCallback(error);
+                }
                 return;
             }
             NSDictionary *object = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
             if (error) {
                 MixpanelError(@"%@ decide check json error: %@, data: %@", self, error, [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
+                if(errorCallback){
+                    errorCallback(error);
+                }
                 return;
             }
             if (object[@"error"]) {
                 MixpanelDebug(@"%@ decide check api error: %@", self, object[@"error"]);
+                if(errorCallback){
+                    errorCallback(error);
+                }
                 return;
             }
 
@@ -1345,6 +1354,11 @@ static void MixpanelReachabilityCallback(SCNetworkReachabilityRef target, SCNetw
             completion(unseenSurveys, unseenNotifications, newVariants, newEventBindings);
         }
     });
+}
+
+- (void)checkForDecideResponseWithCompletion:(void (^)(NSArray *surveys, NSArray *notifications, NSSet *variants, NSSet *eventBindings))completion useCache:(BOOL)useCache
+{
+    [self checkForDecideResponseWithCompletion:completion useCache:useCache errorCallback:nil];
 }
 
 - (void)checkForSurveysWithCompletion:(void (^)(NSArray *surveys))completion
@@ -1776,6 +1790,28 @@ static void MixpanelReachabilityCallback(SCNetworkReachabilityRef target, SCNetw
     });
 
     [self track:@"$experiment_started" properties:@{@"$experiment_id" : @(variant.experimentID), @"$variant_id": @(variant.ID)}];
+}
+
+- (void)joinExperimentsWithCallback:(void(^)())experimentsLoadedCallback errorCallback:(void(^)(NSError *))experimentsErrorCallback
+{
+    [self checkForDecideResponseWithCompletion:^(NSArray *surveys, NSArray *notifications, NSSet *variants, NSSet *eventBindings) {
+        for (MPVariant *variant in variants) {
+            [variant execute];
+            [self markVariantRun:variant];
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (experimentsLoadedCallback) {
+                experimentsLoadedCallback();
+            }
+        });
+    } useCache:NO errorCallback:^(NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (experimentsErrorCallback) {
+                experimentsErrorCallback(error);
+            }
+        });
+    }];
 }
 
 - (void)joinExperimentsWithCallback:(void(^)())experimentsLoadedCallback

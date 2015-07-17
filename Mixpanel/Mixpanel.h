@@ -703,6 +703,18 @@
  */
 - (void)joinExperimentsWithCallback:(void(^)())experimentsLoadedCallback;
 
+/*!
+    @method
+
+    @abstract
+    Join any experiments (A/B tests) that are available for the current user or call error
+    callback if experiments cannot be fetched.
+
+    @discussion
+    Same as joinExperimentsWithCallback but will fire the error callback in case of any error
+ */
+- (void)joinExperimentsWithCallback:(void (^)())experimentsLoadedCallback errorCallback:(void (^)(NSError *))experimentsErrorCallback;
+
 #endif
 
 @end
