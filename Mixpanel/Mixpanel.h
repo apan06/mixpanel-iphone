@@ -225,6 +225,18 @@
  */
 @property (atomic, weak) id<MixpanelDelegate> delegate; // allows fine grain control over uploading (optional)
 
+/*!
+
+ @property
+
+ @abstract
+ The variants readonly property so you could check currently running variants without a hack,
+ Warning: This is not an original mixpanel property
+
+ */
+
+@property (nonatomic, strong, readonly) NSSet *variants;
+
 #pragma mark Tracking
 
 /*!
